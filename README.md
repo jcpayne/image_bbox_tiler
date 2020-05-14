@@ -1,8 +1,10 @@
 [![PyPI version](https://badge.fury.io/py/image-bbox-slicer.svg)](https://badge.fury.io/py/image-bbox-slicer) [![](https://img.shields.io/github/license/mashape/apistatus.svg)](LICENSE)
-# image_bbox_tiler 
+
+
+# image_bbox_tiler (IN DEVELOPMENT)
 This is a fork of the image_bbox_slicer package, designed to make the tiling more accurate, to avoid losing pixels on the edges of images, and to allow the user to sample some proportion of 'empty' tiles (tiles that do not include any object of interest).  It also avoids creating tiles that will not be saved, to speed up the tiling operation.
 
-I'm ignorant about how to do this so maybe I shouldn't have changed the name...I'm just trying to make the forked version portable.  
+**CAVEATS: I'm ignorant about proper etiquette for forking so maybe I shouldn't have changed the name or docs or license...I'm just trying to make the forked version importable.  Currently the `slice_by_size()` function is working (plus all of the functions that it depends on) but I haven't tested everything to make sure that I didn't break something else.**
 
 The main differences are:
 1. The original package discarded any pixels that fall outside an even multiple of the tile size. That wastes a lot of data if the tiles are large. Each image is now padded with zeros out to an even multiple of tile size _before_ tiling it so no data is lost, and the padding works correctly if the images are of different sizes. 
