@@ -2,6 +2,8 @@
 # image_bbox_tiler 
 This is a fork of the image_bbox_slicer package, designed to make the tiling more accurate, to avoid losing pixels on the edges of images, and to allow the user to sample some proportion of 'empty' tiles (tiles that do not include any object of interest).  It also avoids creating tiles that will not be saved, to speed up the tiling operation.
 
+I'm ignorant about how to do this so maybe I shouldn't have changed the name...I'm just trying to make the forked version portable.  
+
 The main differences are:
 1. The original package discarded any pixels that fall outside an even multiple of the tile size. That wastes a lot of data if the tiles are large. Each image is now padded with zeros out to an even multiple of tile size _before_ tiling it so no data is lost, and the padding works correctly if the images are of different sizes. 
 2. The tile overlap math, tile size calculations, and row and column indexes were fixed to make them precisely correct (instead of various rough approximations, truncations, etc.);

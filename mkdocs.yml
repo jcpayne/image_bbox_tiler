@@ -7,4 +7,4 @@ nav:
 - License: 'license.md'
 
 theme: readthedocs
-repo_url: https://github.com/akshaychandra21/image_bbox_slicer
+repo_url: https://github.com/jcpayne/image_bbox_tiler
