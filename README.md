@@ -1,6 +1,18 @@
 [![PyPI version](https://badge.fury.io/py/image-bbox-slicer.svg)](https://badge.fury.io/py/image-bbox-slicer) [![](https://img.shields.io/github/license/mashape/apistatus.svg)](LICENSE)
-# image_bbox_slicer 
+# image_bbox_tiler 
+This is a fork of the image_bbox_slicer package, designed to make the tiling more accurate, to avoid losing pixels on the edges of images, and to allow the user to sample some proportion of 'empty' tiles (tiles that do not include any object of interest).  It also avoids creating tiles that will not be saved, to speed up the tiling operation.
 
+The main differences are:
+1. The original package discarded any pixels that fall outside an even multiple of the tile size. That wastes a lot of data if the tiles are large. Each image is now padded with zeros out to an even multiple of tile size _before_ tiling it so no data is lost, and the padding works correctly if the images are of different sizes. 
+2. The tile overlap math, tile size calculations, and row and column indexes were fixed to make them precisely correct (instead of various rough approximations, truncations, etc.);
+3. Fixed a problem with float values in annotations that caused a display error;
+4. Built in the capability to sample a variable proportion of empty tiles;
+5. Revamped tile naming so that tiles are named with row and column indexes to make future reassembly easier.
+6. Modified the code so tiles that will not be saved are not created in the first place, to save memory and CPU cycles;
+7. Made the tiled images display in the correct row and column relative to the original image, and to show padding (the placement of tiles in the original package was approximate, relative to the source image). 
+
+The rest of this document is the original **image_bbox_slicer** document:
+---------------------------------------------
 This easy-to-use library is a data transformer sometimes useful in Object Detection tasks. It splits images and their bounding box annotations into tiles, both into specific sizes and into any arbitrary number of equal parts. It can also resize them, both by specific sizes and by a resizing/scaling factor. Read the docs [here](https://image-bbox-slicer.readthedocs.io/en/latest/).
 
 <div align="center">
@@ -12,7 +24,11 @@ Currently, this library only supports bounding box annotations in [PASCAL VOC](h
 ## UPDATE: This tool was only tested on Linux/Ubuntu. Please find a _potential fix_ to make it work on Windows [here](https://github.com/acl21/image_bbox_slicer/issues/2).  
 
 ## Installation
-```python
+```bash
+#Install this fork:
+$ pip install git+https://github.com/jcpayne/image_bbox_tiler@master 
+
+#The original package is on PyPI.  To install it instead of this fork: 
 $ pip install image_bbox_slicer
 ```
 
@@ -28,7 +44,7 @@ matplotlib==3.0.3
 _Note: This usage demo can be found in `demo.ipynb` in the repo._
 
 ```python
-import image_bbox_slicer as ibs
+import image_bbox_tiler as ibs
 ```
 
 ### Create And Configure `Slicer` Object
@@ -67,6 +83,8 @@ slicer.keep_partial_labels = True
 An empty tile is a tile with no "labels" in it. The definition of "labels" here is tightly coupled with the user's preference of partial labels. If you choose to keep the partial labels (i.e. `keep_partial_labels = True`), a tile with a partial label is not treated as empty. If you choose to not keep the partial labels (i.e. `keep_partial_labels = False`), a tile with one or more partial labels is considered empty. 
 
 Configure your slicer to either ignore or consider empty tiles by setting `Slicer` object's `ignore_empty_tiles` instance variable to `True` or `False` respectively. By default it is set to `True`.  
+
+**New in image_bbox_tiler**: you can sample a proportion of the empty tiles by setting 'empty_sample'= <a float in the range [0-1]>.
 
 
 ```python

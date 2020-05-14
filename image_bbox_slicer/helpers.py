@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import xml.etree.ElementTree as ET
 from math import sqrt, ceil, floor
+import re
 
 
 IMG_FORMAT_LIST = ['jpg', 'jpeg', 'png', 'tiff', 'exif', 'bmp']
@@ -40,7 +41,6 @@ def calc_columns_rows(n):
 
 # Source : Sam Dobson
 # https://github.com/samdobson/image_slicer
-
 
 def validate_number_tiles(number_tiles):
     """Validates the sanity of the number of tiles asked for.
@@ -339,84 +339,49 @@ def extract_from_xml(file):
         objects.append(value)
     return root, objects
 
-
-def plot_image_boxes(img_path, ann_path, file_name):
-    """Plots bounding boxes on images using `matplotlib`.
-
-    Works in two modes - unsliced and sliced modes.
-    In unsliced mode, only one picture is plotted.
-    In sliced mode, all the slices are plotted.
+def calc_padding(img_size,tile_size,tile_overlap):
+    """
+    Calculates the padding needed to make an image an even multiple of tile size, given overlap 
+    between tiles.
+    NOTE: With overlap, final dimensions are hard to visualize. The correct formula for width is 
+        (((img_width // stride_w)-1) * stride_w) + tile_w
+    Height is analogous.  In other words, you sum the stride for all tiles except the last tile,
+    for which you add the full tile width.
 
     Parameters
-    ----------
-    img_path : str
-        /path/to/image/source/directory
-    ann_path : str
-        /path/to/annotation/source/directory
-    file_name : str or list
-        Name of the file (in unsliced mode).
-        List of file names (in sliced mode).
-
-    Returns
-    ----------
-    None
+    ---------------
+    img: a PIL image
+    tile_size: tuple (width, height) in pixels
+    tile_overlap: float. Tile overlap between consecutive strides as proportion of tile size 
+    (the same proportion is used for height and width).
+    Returns:
+    ---------------
+    padding.  A tuple (left, top, right, bottom) of padding in pixels for the sides of an image.  
+                Padding is added to right and bottom only.
     """
-    # Checking if the file is a source image as the data type
-    # Source image - string, tile images - list of strings
-    if isinstance(file_name, str):
-        tree = ET.parse(ann_path + '/' + file_name + '.xml')
-        root = tree.getroot()
+    #Extract params
+    img_width, img_height = img_size
+    tile_width,tile_height = tile_size
 
-        im = Image.open(img_path + '/' + file_name + '.jpg')
-        im = np.array(im, dtype=np.uint8)
+    #Calculate tile overlap in pixels
+    tile_w_overlap = int(tile_width * tile_overlap)
+    tile_h_overlap = int(tile_height * tile_overlap)
 
-        rois = []
-        for member in root.findall('object'):
-            rois.append((int(member[4][0].text), int(member[4][1].text),
-                         int(member[4][2].text), int(member[4][3].text)))
+    #Calculate stride in pixels
+    tile_w_stride = tile_width - tile_w_overlap
+    tile_h_stride = tile_height - tile_h_overlap
 
-        # Create figure and axes
-        fig, ax = plt.subplots(1, figsize=(10, 10))
+    #Calculate amount to add (in pixels)
+    delta_w = tile_width - (img_width % tile_w_stride) 
+    delta_h = tile_height - (img_height % tile_h_stride)
 
-        # Display the image
-        ax.imshow(im)
+    #Adjust if deltas are > tile size
+    if delta_w >= tile_width: 
+        delta_w = delta_w - tile_width
+    if delta_h >= tile_height:
+        delta_h = delta_h - tile_height
 
-        for roi in rois:
-            # Create a Rectangle patch
-            rect = patches.Rectangle((roi[0], roi[1]), roi[2]-roi[0], roi[3]-roi[1],
-                                     linewidth=3, edgecolor='b', facecolor='none')
+    #Padding (left, top, right, bottom) in pixelsa
+    padding = (0, 0, delta_w, delta_h)
+    return padding
 
-            # Add the patch to the Axes
-            ax.add_patch(rect)
-    else:
-        cols, rows = calc_columns_rows(len(file_name))
-        pos = []
-        for i in range(0, rows):
-            for j in range(0, cols):
-                pos.append((i, j))
-        fig, ax = plt.subplots(rows, cols, sharex='col',
-                               sharey='row', figsize=(10, 7))
-        for idx, file in enumerate(file_name):
-
-            tree = ET.parse(ann_path + '/' + file + '.xml')
-            root = tree.getroot()
-
-            im = Image.open(img_path + '/' + file + '.jpg')
-            im = np.array(im, dtype=np.uint8)
-
-            rois = []
-            for member in root.findall('object'):
-                rois.append((int(member[4][0].text), int(member[4][1].text),
-                             int(member[4][2].text), int(member[4][3].text)))
-
-            # Display the image at the right position
-            ax[pos[idx][0], pos[idx][1]].imshow(im)
-
-            for roi in rois:
-                # Create a Rectangle patch
-                rect = patches.Rectangle((roi[0], roi[1]), roi[2]-roi[0], roi[3]-roi[1],
-                                         linewidth=3, edgecolor='b', facecolor='none')
-
-                # Add the patch to the Axes
-                ax[pos[idx][0], pos[idx][1]].add_patch(rect)
-    plt.show()
