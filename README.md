@@ -13,7 +13,8 @@ The main differences are:
 4. Built in the capability to sample a variable proportion of empty tiles;
 5. Revamped tile naming so that tiles are named with row and column indexes to make future reassembly easier.
 6. Modified the code so tiles that will not be saved are not created in the first place, to save memory and CPU cycles;
-7. Made the tiled images display in the correct row and column relative to the original image, and to show padding (the placement of tiles in the original package was approximate, relative to the source image). 
+7. Made the tiled images display in the correct row and column relative to the original image, and to show padding (the placement of tiles in the original package was approximate, relative to the source image).
+8. Images (but not yet annotations) can now be found by recursive search; i.e., the im_src directory can be pointed at a parent directory that contains subdirectories with images in them.
 
 The rest of this document is the original **image_bbox_slicer** document:
 ---------------------------------------------

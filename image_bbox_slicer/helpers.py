@@ -13,7 +13,7 @@ import matplotlib.patches as patches
 import xml.etree.ElementTree as ET
 from math import sqrt, ceil, floor
 import re
-
+from pathlib import Path
 
 IMG_FORMAT_LIST = ['jpg', 'jpeg', 'png', 'tiff', 'exif', 'bmp']
 
@@ -137,8 +137,12 @@ def validate_file_names(img_src, ann_src):
     Exception
         If `img_src` and `ann_src` do not have matching image and annotation file names respectively.
     """
-    imgs = sorted(glob.glob(img_src + '/*'))
-    anns = sorted(glob.glob(ann_src + '/*.xml'))
+    imgs = [str(x) for x in sorted(list(Path(img_src).rglob('*')))]
+    anns = [str(x) for x in sorted(list(Path(ann_src).rglob('*.xml')))]
+    
+    #Non-recursive search
+    #imgs = sorted(glob.glob(img_src + '/*'))
+    #anns = sorted(glob.glob(ann_src + '/*.xml'))
 
     imgs_filter = [True if x.split(
         '.')[-1].lower() in IMG_FORMAT_LIST else False for x in imgs]

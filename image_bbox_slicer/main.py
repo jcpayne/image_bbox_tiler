@@ -8,6 +8,7 @@ import random
 from PIL import Image
 from pascal_voc_writer import Writer
 from torchvision.transforms.functional import pad as tvpad #Used for padding
+#from pathlib import Path  #I put this in helpers instead
 from .helpers import *
 
 class Slicer(object):
@@ -261,7 +262,10 @@ class Slicer(object):
         self._tile_size = tile_size #set these in self for plotting
         self._tile_overlap = tile_overlap
             
-        for file in sorted(glob.glob(self.IMG_SRC + "/*")):
+        #for file in sorted(glob.glob(self.IMG_SRC + "/*")):
+        image_files = [str(x) for x in sorted(list(Path(self.IMG_SRC).rglob('*')))]
+        for file in image_files:
+            file_fullname = file
             file_name = file.split('/')[-1].split('.')[0]
             file_type = file.split('/')[-1].split('.')[-1].lower()
             if file_type.lower() not in IMG_FORMAT_LIST:
@@ -304,7 +308,7 @@ class Slicer(object):
                     new_im.save('{}/{}.{}'.format(self.IMG_DST, tile_id_str, file_type))
                     new_ids.append(tile_id_str)
                     img_no += 1
-            mapper[file_name] = new_ids #Add the tiles to the dict (key=file_name, item = saved tiles (new_ids))    
+            mapper[file_fullname] = new_ids #Add the tiles to the dict (key=file_name, item = saved tiles (new_ids))    
         print('Obtained {} image slices!'.format(img_no-1))
         return mapper
 
@@ -552,7 +556,9 @@ class Slicer(object):
     def __resize_images(self, new_size, resample, resize_factor):
         """Private Method
         """
-        for file in sorted(glob.glob(self.IMG_SRC + "/*")):
+        #for file in sorted(glob.glob(self.IMG_SRC + "/*")):
+        image_files = [str(x) for x in sorted(list(Path(self.IMG_SRC).rglob('*')))]
+        for file in image_files:
             file_name = file.split('/')[-1].split('.')[0]
             file_type = file.split('/')[-1].split('.')[-1].lower()
             if file_type not in IMG_FORMAT_LIST:
@@ -652,20 +658,22 @@ class Slicer(object):
             map_path = self.IMG_DST + '/mapper.csv'
         else:
             map_path = map_dir + '/mapper.csv'
+
         #Extract one record (orig_filename, list of tile_names) from the mapper.csv file at random
         with open(map_path) as src_map:
             read_csv = csv.reader(src_map, delimiter=',')
             # Skip the header
             next(read_csv, None)
             mapping = random.choice(list(read_csv))
-            src_file = mapping[0]
+            src_fullpath = mapping[0] #the full path to the jpg image
+            src_name = src_fullpath.split('/')[-1].split('.')[-2] #just the filename without extension
             tile_files = mapping[1:]
             tsize = self._tile_size
             toverlap = self._tile_overlap
             
             #Plot the original image, then the tiles
-            self.plot_image_boxes(self.IMG_SRC, self.ANN_SRC, src_file)
-            self.plot_tile_boxes(self.IMG_SRC,self.IMG_DST, self.ANN_DST, src_file,tile_files,tsize,toverlap)
+            self.plot_image_boxes(self.IMG_SRC, self.ANN_SRC, src_fullpath, src_name)
+            self.plot_tile_boxes(self.IMG_SRC,self.IMG_DST, self.ANN_DST, src_fullpath, src_name,tile_files,tsize,toverlap)
 
     def visualize_resized_random(self):
         """Picks an image randomly and visualizes original and resized images using `matplotlib`
@@ -679,7 +687,9 @@ class Slicer(object):
         None
             However, displays the final plots.
         """
-        im_file = random.choice(list(glob.glob('{}/*'.format(self.IMG_SRC))))
+        #im_file = random.choice(list(glob.glob('{}/*'.format(self.IMG_SRC))))
+        image_files = [str(x) for x in list(Path(self.IMG_SRC).rglob('*'))]
+        im_file = random.choice(image_files)
         file_name = im_file.split('/')[-1].split('.')[0]
 
         self.plot_image_boxes(self.IMG_SRC, self.ANN_SRC, file_name)
@@ -713,7 +723,7 @@ class Slicer(object):
         rownum = [n for (n,tpl) in enumerate(rows) if (tile[1],tile[3]) == tpl]
         return (rownum,colnum)
 
-    def plot_image_boxes(self,img_path, ann_path, file_name):
+    def plot_image_boxes(self,img_path, ann_path, src_fullpath,src_name):
         """Plots bounding boxes on images using `matplotlib`.
         Parameters
         ----------
@@ -721,9 +731,10 @@ class Slicer(object):
             /path/to/image/source/directory
         ann_path : str
             /path/to/annotation/source/directory
-        file_name : str or list
-            Either: Name of the randomly-selected image file (in unsliced mode).
-            Or: List of file names (in sliced mode) of the tiles that correspond with the image.
+        src_fullpath: str 
+            /full/path/to/image
+        src_name: str 
+            image name without extension
 
         Returns
         ----------
@@ -731,10 +742,11 @@ class Slicer(object):
         """    
         #Plot original image
         #Find the original xml file with bbox annotations for this image:
-        tree = ET.parse(ann_path + '/' + file_name + '.xml')
+        tree = ET.parse(ann_path + '/' + src_name + '.xml')
         root = tree.getroot()
         #Find the image and convert to Numpy array
-        im = Image.open(img_path + '/' + file_name + '.jpg')
+        #im = Image.open(img_path + '/' + file_name + '.jpg')
+        im = Image.open(src_fullpath)
         im = np.array(im, dtype=np.uint8)
 
         #list the original (un-tiled) bounding boxes
@@ -758,7 +770,7 @@ class Slicer(object):
             ax.add_patch(rect)
         plt.show()
 
-    def plot_tile_boxes(self,src_img_path,tileimg_path, ann_path, src_img_name,tile_names,tile_size,tile_overlap):
+    def plot_tile_boxes(self,src_img_path,tileimg_path, ann_path, src_fullpath,src_name,tile_names,tile_size,tile_overlap):
         """
         Plots a matrix of tiles from a tiled image in correct row/column locations.
         Parameters
@@ -766,14 +778,19 @@ class Slicer(object):
         src_img_path: /path/to/image/source/directory
         tileimg_path: /path/to/tile_image/destination/directory
         ann_path: /path/to/annotation/source/directory
-        src_img_name: filename of original (un-tiled) file
+        src_fullpath: full path to original (un-tiled) file
+        src_name: filename only of original (un-tiled) file, without extension
         tile_names: list of filenames for the tiles corresponding to the src_img_name file
         tile_size: tuple(int,int).  Tile size in pixels.  Set in __slice_images().
         tile_overlap: float.  Proportion of overlap between consecutive tiles.  
+        
+        Returns
+        ----------
+        None
         """
         #Get tile matrix dimensions for this particular image
         #Image must be padded and then tiles calculated.
-        fn = src_img_path + '/' + src_img_name + '.jpg'
+        fn = src_fullpath
         orig_size = Image.open(fn).size
         padding = calc_padding(orig_size,tile_size,tile_overlap)
         img_size = (orig_size[0] + padding[2],orig_size[1] + padding[3])
