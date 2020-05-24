@@ -4,7 +4,7 @@
 # image_bbox_tiler (IN DEVELOPMENT)
 This is a fork of the image_bbox_slicer package, designed to make the tiling more accurate, to avoid losing pixels on the edges of images, and to allow the user to sample some proportion of 'empty' tiles (tiles that do not include any object of interest).  It also avoids creating tiles that will not be saved, to speed up the tiling operation.
 
-**CAVEATS: I'm ignorant about proper etiquette for forking so maybe I shouldn't have changed the name or docs or license...I'm just trying to make the forked version importable.  Currently the `slice_by_size()` function is working (plus all of the functions that it depends on) but I haven't tested everything to make sure that I didn't break something else.**
+**CAVEATS: Currently the `slice_by_size()` function is working (plus all of the functions that it depends on) but I haven't tested everything to make sure that I didn't break something else.**
 
 The main differences are:
 1. The original package discarded any pixels that fall outside an even multiple of the tile size. That wastes a lot of data if the tiles are large. Each image is now padded with zeros out to an even multiple of tile size _before_ tiling it so no data is lost, and the padding works correctly if the images are of different sizes. 
@@ -13,8 +13,30 @@ The main differences are:
 4. Built in the capability to sample a variable proportion of empty tiles;
 5. Revamped tile naming so that tiles are named with row and column indexes to make future reassembly easier.
 6. Modified the code so tiles that will not be saved are not created in the first place, to save memory and CPU cycles;
-7. Made the tiled images display in the correct row and column relative to the original image, and to show padding (the placement of tiles in the original package was approximate, relative to the source image).
+7. The tiled images display in the correct row and column relative to the original image, and show padding (the placement of tiles in the original package was approximate, relative to the source image).
 8. Images (but not yet annotations) can now be found by recursive search; i.e., the im_src directory can be pointed at a parent directory that contains subdirectories with images in them.
+9. Bounding boxes fragments that are smaller than tile overlap in the appropriate dimension can be excluded by setting `exclude_fragments=True` (see next)
+
+## Excluding bounding box fragments
+The problem: When tiling images to generate training data, the associated bounding boxes must also be tiled.  Splitting bounding boxes across tiles creates box fragments on one side of a tile boundary.  When creating training data for a deep learning model, it is desirable to exclude small box fragments because they are very unlikely to contain a recognizable object. Overlapping the tiles does not eliminate the problem.  
+
+**The method implemented here allows the user to ensure that no feature smaller than the tile overlap will be excluded, while getting rid of all smaller fragments.**
+
+In the diagram below, the large box is a tile and the overlap with adjacent tiles is shown by dotted lines. The `exclude_fragments=True` option excludes the bounding boxes shown below in yellow (A, B, and C) from the tile.  For simplicity, bounding boxes are only shown on the bottom and right of the tile in the image, but the behavior is identical for the top and left edges of the tile, respectively.
+
+**Decision rule:**
+Given that a rectangular bounding box can have 1, 2, or 4 (but not 3) corners inside a rectangular tile if they are aligned:
+- If 1 corner of the box is in the tile: 
+    - if (box_w < tile_overlap_w) or (box_h < tile_overlap_h): discard the box
+- If 2 corners of the box are in the tile:
+    - if the box is on the left or right side of the tile and (box_w < tile_overlap_w): discard  
+    - if the box is on the top or bottom of the tile and (box_h < tile_overlap_h): discard
+- Include the bounding box in all other cases.
+
+In the figure, the green bounding boxes would all be included in the annotations for this tile.  Box D will be recorded in this tile only; box E will be sliced in half and will be recorded (with overlap) in this tile and the tile below it.  Box F will be recorded in both this tile and the tile below.  Box G will appear on this tile and in the tile to the right (minus the portion to the left of the dotted line). Boxes A, B and C will not be recorded in this tile, but _will_ be recorded on adjacent tiles.  
+<div align="left">
+<img src="imgs/bbox_fragments.png" alt="Bounding box fragments diagram" />
+</div>
 
 The rest of this document is the original **image_bbox_slicer** document:
 ---------------------------------------------

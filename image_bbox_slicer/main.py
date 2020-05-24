@@ -62,6 +62,7 @@ class Slicer(object):
         self.keep_partial_labels = False
         self.save_before_after_map = False
         self.ignore_empty_tiles = True
+        self.exclude_fragments = True
         self._ignored_files = [] #Files without objects of interest to be ignored (if ignore_empty_tiles=TRUE)
         self._mapper = {} #A dict of file+tile names.
         self._just_image_call = True
@@ -320,8 +321,10 @@ class Slicer(object):
         tile_size : tuple
             Size of each tile in pixels, as a 2-tuple: (width, height).
         tile_overlap: float, optional  
-            Percentage of tile overlap between two consecutive strides.
+            Proportion of tile overlap between two consecutive strides.
             Default value is `0`.
+        empty_sample: float [0-1]
+            Proportion of tiles that don't include bounding boxes to sample
 
         Returns
         ----------
@@ -330,7 +333,7 @@ class Slicer(object):
         validate_tile_size(tile_size)
         validate_overlap(tile_overlap)
         self._ignored_files = []
-        mapper = self.__slice_bboxes(tile_size, tile_overlap, number_tiles=-1,empty_sample=empty_sample)
+        mapper = self.__slice_bboxes(tile_size, tile_overlap,number_tiles=-1,empty_sample=empty_sample)
         self._mapper = mapper
         if self.save_before_after_map:
             save_before_after_map_csv(mapper, self.ANN_DST)
@@ -342,7 +345,7 @@ class Slicer(object):
         ----------
         number_tiles : int
             The number of tiles an image needs to be sliced into.
-
+        
         Returns
         ----------
         None
@@ -357,7 +360,6 @@ class Slicer(object):
     def __slice_bboxes(self, tile_size, tile_overlap, number_tiles, empty_sample):
         """
         Private Method.  Determines whether tiles contain bounding boxes, then saves tiles as requested.
-        
         Writes a mapper (a dict of filenames/tiles) to self that may later be read by __slice_images()
         """        
         img_no = 1
@@ -375,14 +377,18 @@ class Slicer(object):
             padding = calc_padding((orig_w,orig_h),tile_size,tile_overlap)
             im_size = (orig_w + padding[2],orig_h + padding[3])
             im_w,im_h = im_size
+            #If called from __slice_by_number, then number_tiles will be > 0
             if number_tiles > 0:
                 n_cols, n_rows = calc_columns_rows(number_tiles)
                 tile_w = int(floor(im_w / n_cols))
                 tile_h = int(floor(im_h / n_rows))
                 tile_size = (tile_w, tile_h)
                 tile_overlap = 0.0
+            #Else was called by __slice_by_size
             else:
                 tile_w, tile_h = tile_size
+                tile_w_overlap = int(tile_w * tile_overlap) #convert overlap to pixels
+                tile_h_overlap = int(tile_h * tile_overlap)
             tiles = self.__get_tiles(im_size, tile_size, tile_overlap)
             tile_ids = []
 
@@ -390,7 +396,7 @@ class Slicer(object):
                 #Get tile row and column
                 row,col = self.__get_rowcol_indexes(tiles,tile)
                 img_no_str = '{}{}{}'.format(im_filename,row,col)
-                #initialize a new writer
+                #initialize a new annotation writer for this tile
                 voc_writer = Writer('{}'.format(img_no_str), tile_w, tile_h)
                 #Loop through all objects (bboxes) in the image to check if each falls in this tile
                 empty_count = 0 #The number of bboxes that don't fall in the tile
@@ -442,6 +448,30 @@ class Slicer(object):
                         new_lbl = (obj_lbl[0] - tile[0], 0,
                                    obj_lbl[2] - tile[0], obj_lbl[3] - tile[1])
 
+                    if self.exclude_fragments:   
+                        #Dimensions of the new box
+                        box_w = abs(new_lbl[2] - new_lbl[0])
+                        box_h = abs(new_lbl[3] - new_lbl[1])
+
+                        #This set of conditions excludes new boxes that are smaller than the tile overlap
+                        #in the appropriate dimension.
+                        #If only one corner of the box is in the tile:
+                        if points_info in (Points.P1, Points.P2, Points.P3, Points.P4):
+                            if (box_w < tile_w_overlap) or (box_h < tile_h_overlap):
+                                empty_count += 1 
+                                continue
+                        #If two points of the box are in the tile and the box is on a vertical edge (i.e. side) of the tile:
+                        elif points_info in (Points.P1_P3,Points.P2_P4):
+                            if box_w < tile_w_overlap:
+                                empty_count += 1 
+                                continue
+                        #If two points of the box are in the tile and the box is on the top or bottom of the tile:
+                        elif points_info in (Points.P1_P2,Points.P3_P4):
+                            if box_h < tile_h_overlap:
+                                empty_count += 1 
+                                continue                    
+                    
+                    #addObject(self, name, xmin, ymin, xmax, ymax, pose='Unspecified', truncated=0, difficult=0)
                     voc_writer.addObject(obj[0], new_lbl[0], new_lbl[1], new_lbl[2], new_lbl[3],
                                          obj[1], obj[2], obj[3])
                 #Add filename to the "ignore" list if none of the bbox objects fall in it
